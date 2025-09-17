@@ -101,9 +101,6 @@ with st.sidebar:
     projet = st.selectbox("2) Sélectionner le projet", ["Tous"] + projets)
     df_proj = df_year if projet == "Tous" else df_year[df_year["OPÉRATION"] == projet]
 
-    st.header("⚙️ Options")
-    mode_interactif = st.checkbox("🔄 Activer le mode interactif (st.dataframe)", value=False)
-
 st.subheader("📊 Chiffres clés")
 if len(df_proj) == 0:
     st.warning("Aucun résultat avec ces critères.")
@@ -129,14 +126,14 @@ else:
     st.divider()
     st.subheader("🔬 Résultats détaillés")
 
+    # 🔧 Fix ultime : affichage HTML au lieu de dataframe/table
     df_proj = df_proj.loc[:, ~df_proj.columns.duplicated()].copy()
     df_proj = df_proj.reset_index(drop=True)
-    df_proj_display = df_proj.astype(str)
+    df_proj_html = df_proj.astype(str).to_html(index=False, escape=False)
 
-    if mode_interactif:
-        st.dataframe(df_proj_display, use_container_width=True)
-    else:
-        st.table(df_proj_display)
+    st.markdown("### Résultats détaillés (mode HTML)")
+    st.write("⚠️ Pas de tri interactif, mais zéro plantage ✅")
+    st.components.v1.html(df_proj_html, height=600, scrolling=True)
 
     csv = df_proj.to_csv(index=False).encode("utf-8")
     st.download_button("💾 Exporter en CSV", data=csv, file_name="resultats.csv", mime="text/csv")
