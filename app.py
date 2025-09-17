@@ -133,8 +133,9 @@ else:
     st.divider()
     st.subheader("🔬 Résultats détaillés")
 
-    # 🔧 Fix final : supprimer colonnes dupliquées + convertir tout sauf numériques en str
+    # 🔧 Fix ultime : supprimer colonnes dupliquées + reset index + forcer non-numériques en str
     df_proj = df_proj.loc[:, ~df_proj.columns.duplicated()].copy()
+    df_proj = df_proj.reset_index(drop=True)
     for col in df_proj.columns:
         if not pd.api.types.is_numeric_dtype(df_proj[col]) and not pd.api.types.is_bool_dtype(df_proj[col]):
             df_proj[col] = df_proj[col].astype(str)
