@@ -37,11 +37,11 @@ def load_and_transform(file_bytes: bytes):
     if "DATE ATTRIBUTION" in df.columns:
         df["Année"] = df["DATE ATTRIBUTION"].astype(str).str.extract(r"(\d{4})")
 
-    # ✅ Fix : on supprime pd.Series(s), on traite directement s
+    # ✅ Version robuste de to_num
     def to_num(s):
+        s = pd.Series(s, dtype="string")  # force tout en texte
         return pd.to_numeric(
-            s.astype(str)
-             .str.replace("\u202f", "", regex=False)
+            s.str.replace("\u202f", "", regex=False)
              .str.replace("\xa0", "", regex=False)
              .str.replace(" ", "", regex=False)
              .str.replace(",", ".", regex=False)
@@ -153,4 +153,3 @@ else:
                        file_name="resultats.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 st.caption("💡 Conseil : placez le fichier Excel dans le repo avec le nom exact `HSC_Matrice prix Pilotes_2025.xlsx` pour qu'il soit chargé automatiquement.")
-
