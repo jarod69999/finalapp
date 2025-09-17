@@ -37,27 +37,27 @@ def load_and_transform(file_bytes: bytes):
     if "DATE ATTRIBUTION" in df.columns:
         df["Année"] = df["DATE ATTRIBUTION"].astype(str).str.extract(r"(\d{4})")
 
+    # ✅ Fix : on supprime pd.Series(s), on traite directement s
     def to_num(s):
         return pd.to_numeric(
-            pd.Series(s).astype(str)
-              .str.replace("\u202f", "", regex=False)
-              .str.replace("\xa0", "", regex=False)
-              .str.replace(" ", "", regex=False)
-              .str.replace(",", ".", regex=False)
-              .str.replace("€", "", regex=False)
-              .str.replace("m²", "", regex=False)
-              .str.replace("%", "", regex=False)
-              .str.strip(),
+            s.astype(str)
+             .str.replace("\u202f", "", regex=False)
+             .str.replace("\xa0", "", regex=False)
+             .str.replace(" ", "", regex=False)
+             .str.replace(",", ".", regex=False)
+             .str.replace("€", "", regex=False)
+             .str.replace("m²", "", regex=False)
+             .str.replace("%", "", regex=False)
+             .str.strip(),
             errors="coerce"
         )
 
-    # 🔧 Fix ici : on force en 1D avec squeeze()
     for col in ["SHAB","Sacc (SDP pour les vieux projets)","Prix conception",
                 "Prix travaux (compris VRD)","Prix VRD","Prix global",
                 "Prix hors-site seul","Prix global / m² SHAB",
                 "Prix C/R hors VRD / m² SHAB"]:
         if col in df.columns:
-            df[col] = to_num(df[col].squeeze())
+            df[col] = to_num(df[col])
 
     if "OPÉRATION" in df.columns:
         df["OPÉRATION"] = df["OPÉRATION"].astype(str).str.strip()
@@ -153,3 +153,4 @@ else:
                        file_name="resultats.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 st.caption("💡 Conseil : placez le fichier Excel dans le repo avec le nom exact `HSC_Matrice prix Pilotes_2025.xlsx` pour qu'il soit chargé automatiquement.")
+
