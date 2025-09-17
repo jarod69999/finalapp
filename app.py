@@ -64,13 +64,6 @@ def load_and_transform(file_bytes: bytes):
 
     return df
 
-# ✅ Fix: nettoyer les colonnes non sérialisables
-def sanitize_for_streamlit(df):
-    for col in df.columns:
-        if df[col].apply(lambda x: isinstance(x, (list, dict, set))).any():
-            df[col] = df[col].astype(str)
-    return df
-
 def format_money(x):
     if pd.isna(x):
         return "—"
@@ -123,7 +116,7 @@ else:
 
         # Nouveaux indicateurs demandés
         c1, c2, c3, c4, c5 = st.columns(5)
-        if not pd.isna(row.get("Prix travaux (compris VRD)")) and not pd.isna(row.get("VRD")) and not pd.isna(row.get("SHAB")):
+        if not pd.isna(row.get("Prix travaux (compris VRD)")) and not pd.isna(row.get("Prix VRD")) and not pd.isna(row.get("SHAB")):
             with c1: st.metric("Travaux hors VRD / m² SHAB",
                                format_unit((row.get("Prix travaux (compris VRD)") - row.get("Prix VRD")) / row.get("SHAB"), "€/m²"))
         with c2: st.metric("Prix global / m² SHAB", format_unit(row.get("Prix global / m² SHAB"), "€/m²"))
@@ -140,9 +133,11 @@ else:
     st.divider()
     st.subheader("🔬 Résultats détaillés")
 
-    # 🔧 Fix: supprimer colonnes dupliquées + objets non sérialisables
+    # 🔧 Fix final : supprimer colonnes dupliquées + convertir tout sauf numériques en str
     df_proj = df_proj.loc[:, ~df_proj.columns.duplicated()].copy()
-    df_proj = sanitize_for_streamlit(df_proj)
+    for col in df_proj.columns:
+        if not pd.api.types.is_numeric_dtype(df_proj[col]) and not pd.api.types.is_bool_dtype(df_proj[col]):
+            df_proj[col] = df_proj[col].astype(str)
 
     st.dataframe(df_proj, use_container_width=True)
 
@@ -156,5 +151,3 @@ else:
                        file_name="resultats.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 st.caption("💡 Conseil : placez le fichier Excel dans le repo avec le nom exact `HSC_Matrice prix Pilotes_2025.xlsx` pour qu'il soit chargé automatiquement.")
-
-
