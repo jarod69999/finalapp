@@ -37,10 +37,11 @@ def load_and_transform(file_bytes: bytes):
     if "DATE ATTRIBUTION" in df.columns:
         df["Année"] = df["DATE ATTRIBUTION"].astype(str).str.extract(r"(\d{4})")
 
-    # ✅ Version stable de to_num
+    # ✅ Version béton de to_num
     def to_num(s):
-        s = pd.Series(s).astype(str)  # force tout en texte
-        return pd.to_numeric(
+        # On force chaque valeur en texte
+        s = pd.Series([str(x) if x is not None else "" for x in s])
+        s = (
             s.str.replace("\u202f", "", regex=False)
              .str.replace("\xa0", "", regex=False)
              .str.replace(" ", "", regex=False)
@@ -48,9 +49,9 @@ def load_and_transform(file_bytes: bytes):
              .str.replace("€", "", regex=False)
              .str.replace("m²", "", regex=False)
              .str.replace("%", "", regex=False)
-             .str.strip(),
-            errors="coerce"
+             .str.strip()
         )
+        return pd.to_numeric(s, errors="coerce")
 
     for col in ["SHAB","Sacc (SDP pour les vieux projets)","Prix conception",
                 "Prix travaux (compris VRD)","Prix VRD","Prix global",
@@ -153,3 +154,4 @@ else:
                        file_name="resultats.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 st.caption("💡 Conseil : placez le fichier Excel dans le repo avec le nom exact `HSC_Matrice prix Pilotes_2025.xlsx` pour qu'il soit chargé automatiquement.")
+
