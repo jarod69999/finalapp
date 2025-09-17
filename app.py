@@ -138,7 +138,8 @@ else:
     df_proj = df_proj.reset_index(drop=True)
     df_proj_display = df_proj.astype(str)
 
-    st.dataframe(df_proj_display, use_container_width=True)
+    # ⚡ Utilisation de st.table au lieu de st.dataframe (pas de PyArrow)
+    st.table(df_proj_display)
 
     csv = df_proj.to_csv(index=False).encode("utf-8")
     st.download_button("💾 Exporter en CSV", data=csv, file_name="resultats.csv", mime="text/csv")
@@ -150,4 +151,5 @@ else:
                        file_name="resultats.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 st.caption("💡 Conseil : placez le fichier Excel dans le repo avec le nom exact `HSC_Matrice prix Pilotes_2025.xlsx` pour qu'il soit chargé automatiquement.")
+
 
