@@ -39,7 +39,6 @@ def load_and_transform(file_bytes: bytes):
 
     # ✅ Version béton de to_num
     def to_num(s):
-        # On force chaque valeur en texte
         s = pd.Series([str(x) if x is not None else "" for x in s])
         s = (
             s.str.replace("\u202f", "", regex=False)
@@ -142,6 +141,10 @@ else:
 
     st.divider()
     st.subheader("🔬 Résultats détaillés")
+
+    # 🔧 Fix: supprimer les colonnes dupliquées avant affichage
+    df_proj = df_proj.loc[:, ~df_proj.columns.duplicated()].copy()
+
     st.dataframe(df_proj, use_container_width=True)
 
     csv = df_proj.to_csv(index=False).encode("utf-8")
@@ -154,4 +157,5 @@ else:
                        file_name="resultats.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 st.caption("💡 Conseil : placez le fichier Excel dans le repo avec le nom exact `HSC_Matrice prix Pilotes_2025.xlsx` pour qu'il soit chargé automatiquement.")
+
 
