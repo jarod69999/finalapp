@@ -37,7 +37,7 @@ def load_and_transform(file_bytes: bytes):
     if "DATE ATTRIBUTION" in df.columns:
         df["Année"] = df["DATE ATTRIBUTION"].astype(str).str.extract(r"(\d{4})")
 
-    # ✅ Version béton de to_num
+    # ✅ to_num robuste
     def to_num(s):
         s = pd.Series([str(x) if x is not None else "" for x in s])
         s = (
@@ -64,12 +64,17 @@ def load_and_transform(file_bytes: bytes):
 
     return df
 
+# ✅ Fix: nettoyer les colonnes non sérialisables
+def sanitize_for_streamlit(df):
+    for col in df.columns:
+        if df[col].apply(lambda x: isinstance(x, (list, dict, set))).any():
+            df[col] = df[col].astype(str)
+    return df
 
 def format_money(x):
     if pd.isna(x):
         return "—"
     return f"{float(x):,.0f} €".replace(",", " ")
-
 
 def format_unit(x, unit=""):
     if pd.isna(x):
@@ -80,7 +85,6 @@ def format_unit(x, unit=""):
     elif unit == "m²":
         return f"{val:,.0f} m²".replace(",", " ")
     return f"{val:,.0f}".replace(",", " ")
-
 
 st.title("🔎 Explorer les projets — BDD Antoine (Cloud)")
 
@@ -117,33 +121,28 @@ else:
     if projet != "Tous" and len(df_proj) >= 1:
         row = df_proj.iloc[0]
 
-        c1, c2, c3, c4 = st.columns(4)
-        with c1: st.metric("SHAB", format_unit(row.get("SHAB"), "m²"))
-        with c2: st.metric("Sacc (SDP)", format_unit(row.get("Sacc (SDP pour les vieux projets)"), "m²"))
-        with c3: st.metric("Prix hors-site seul", format_money(row.get("Prix hors-site seul")))
-        with c4: st.metric("Prix global", format_money(row.get("Prix global")))
+        # Nouveaux indicateurs demandés
+        c1, c2, c3, c4, c5 = st.columns(5)
+        if not pd.isna(row.get("Prix travaux (compris VRD)")) and not pd.isna(row.get("VRD")) and not pd.isna(row.get("SHAB")):
+            with c1: st.metric("Travaux hors VRD / m² SHAB",
+                               format_unit((row.get("Prix travaux (compris VRD)") - row.get("Prix VRD")) / row.get("SHAB"), "€/m²"))
+        with c2: st.metric("Prix global / m² SHAB", format_unit(row.get("Prix global / m² SHAB"), "€/m²"))
+        if not pd.isna(row.get("Sacc (SDP pour les vieux projets)")):
+            with c3: st.metric("Travaux hors VRD / m² Sacc",
+                               format_unit((row.get("Prix travaux (compris VRD)") - row.get("Prix VRD")) / row.get("Sacc (SDP pour les vieux projets)"), "€/m²"))
+        with c4: st.metric("SHAB", format_unit(row.get("SHAB"), "m²"))
+        if not pd.isna(row.get("Prix conception")) and not pd.isna(row.get("Prix global")):
+            with c5: st.metric("Taux honoraire", f"{row.get('Prix conception') / row.get('Prix global') * 100:.1f} %")
 
-        c5, c6, c7, c8 = st.columns(4)
-        with c5: st.metric("Prix travaux (VRD inclus)", format_money(row.get("Prix travaux (compris VRD)")))
-        with c6: st.metric("Prix VRD", format_money(row.get("Prix VRD")))
-        with c7: st.metric("Prix global / m² SHAB", format_unit(row.get("Prix global / m² SHAB"), "€/m²"))
-        with c8: st.metric("Prix C/R hors VRD / m² SHAB", format_unit(row.get("Prix C/R hors VRD / m² SHAB"), "€/m²"))
-
-        c9, c10 = st.columns(2)
-        if not pd.isna(row.get("Prix global")) and not pd.isna(row.get("Prix VRD")):
-            val1 = row.get("Prix global") - row.get("Prix VRD")
-            with c9: st.metric("Prix C/R hors VRD total (Méthode 1)", format_money(val1))
-        if not pd.isna(row.get("Prix C/R hors VRD / m² SHAB")) and not pd.isna(row.get("SHAB")):
-            val2 = row.get("Prix C/R hors VRD / m² SHAB") * row.get("SHAB")
-            with c10: st.metric("Prix C/R hors VRD total (Méthode 2)", format_money(val2))
     else:
         st.info("Sélectionnez un projet précis pour voir les chiffres clés.")
 
     st.divider()
     st.subheader("🔬 Résultats détaillés")
 
-    # 🔧 Fix: supprimer les colonnes dupliquées avant affichage
+    # 🔧 Fix: supprimer colonnes dupliquées + objets non sérialisables
     df_proj = df_proj.loc[:, ~df_proj.columns.duplicated()].copy()
+    df_proj = sanitize_for_streamlit(df_proj)
 
     st.dataframe(df_proj, use_container_width=True)
 
