@@ -37,9 +37,9 @@ def load_and_transform(file_bytes: bytes):
     if "DATE ATTRIBUTION" in df.columns:
         df["Année"] = df["DATE ATTRIBUTION"].astype(str).str.extract(r"(\d{4})")
 
-    # ✅ Version robuste de to_num
+    # ✅ Version stable de to_num
     def to_num(s):
-        s = pd.Series(s, dtype="string")  # force tout en texte
+        s = pd.Series(s).astype(str)  # force tout en texte
         return pd.to_numeric(
             s.str.replace("\u202f", "", regex=False)
              .str.replace("\xa0", "", regex=False)
