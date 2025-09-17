@@ -37,7 +37,6 @@ def load_and_transform(file_bytes: bytes):
     if "DATE ATTRIBUTION" in df.columns:
         df["Année"] = df["DATE ATTRIBUTION"].astype(str).str.extract(r"(\d{4})")
 
-    # ✅ to_num robuste
     def to_num(s):
         s = pd.Series([str(x) if x is not None else "" for x in s])
         s = (
@@ -63,11 +62,6 @@ def load_and_transform(file_bytes: bytes):
         df["OPÉRATION"] = df["OPÉRATION"].astype(str).str.strip()
 
     return df
-
-def format_money(x):
-    if pd.isna(x):
-        return "—"
-    return f"{float(x):,.0f} €".replace(",", " ")
 
 def format_unit(x, unit=""):
     if pd.isna(x):
@@ -107,6 +101,9 @@ with st.sidebar:
     projet = st.selectbox("2) Sélectionner le projet", ["Tous"] + projets)
     df_proj = df_year if projet == "Tous" else df_year[df_year["OPÉRATION"] == projet]
 
+    st.header("⚙️ Options")
+    mode_interactif = st.checkbox("🔄 Activer le mode interactif (st.dataframe)", value=False)
+
 st.subheader("📊 Chiffres clés")
 if len(df_proj) == 0:
     st.warning("Aucun résultat avec ces critères.")
@@ -114,7 +111,6 @@ else:
     if projet != "Tous" and len(df_proj) >= 1:
         row = df_proj.iloc[0]
 
-        # Nouveaux indicateurs demandés
         c1, c2, c3, c4, c5 = st.columns(5)
         if not pd.isna(row.get("Prix travaux (compris VRD)")) and not pd.isna(row.get("Prix VRD")) and not pd.isna(row.get("SHAB")):
             with c1: st.metric("Travaux hors VRD / m² SHAB",
@@ -133,13 +129,14 @@ else:
     st.divider()
     st.subheader("🔬 Résultats détaillés")
 
-    # 🔧 Fix ultime : doublons + reset index + affichage 100% string
     df_proj = df_proj.loc[:, ~df_proj.columns.duplicated()].copy()
     df_proj = df_proj.reset_index(drop=True)
     df_proj_display = df_proj.astype(str)
 
-    # ⚡ Utilisation de st.table au lieu de st.dataframe (pas de PyArrow)
-    st.table(df_proj_display)
+    if mode_interactif:
+        st.dataframe(df_proj_display, use_container_width=True)
+    else:
+        st.table(df_proj_display)
 
     csv = df_proj.to_csv(index=False).encode("utf-8")
     st.download_button("💾 Exporter en CSV", data=csv, file_name="resultats.csv", mime="text/csv")
@@ -151,5 +148,6 @@ else:
                        file_name="resultats.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 st.caption("💡 Conseil : placez le fichier Excel dans le repo avec le nom exact `HSC_Matrice prix Pilotes_2025.xlsx` pour qu'il soit chargé automatiquement.")
+
 
 
