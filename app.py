@@ -19,8 +19,7 @@ def load_and_transform(file_bytes: bytes):
         "OPÉRATION", "DATE ATTRIBUTION", "TYPOLOGIE", "SYSTÈME HORS SITE",
         "NB LOGEMENTS", "Industriel", "SHAB", "Sacc (SDP pour les vieux projets)",
         "Prix conception", "Prix travaux (compris VRD)", "Prix VRD",
-        "Prix global", "Prix hors-site seul", "Prix global / m² SHAB",
-        "Prix C/R hors VRD / m² SHAB",
+        "Prix global", "Prix hors-site seul"
     ]
     cols_exist = [c for c in wanted if c in df.columns]
     df = df[cols_exist].copy()
@@ -44,8 +43,7 @@ def load_and_transform(file_bytes: bytes):
 
     for col in ["SHAB","Sacc (SDP pour les vieux projets)","Prix conception",
                 "Prix travaux (compris VRD)","Prix VRD","Prix global",
-                "Prix hors-site seul","Prix global / m² SHAB",
-                "Prix C/R hors VRD / m² SHAB"]:
+                "Prix hors-site seul"]:
         if col in df.columns:
             df[col] = to_num(df[col])
 
@@ -66,7 +64,16 @@ def format_val(x, unit=""):
         return f"{x:,.0f} m²".replace(",", " ")
     elif unit == "%":
         return f"{x:.1f} %"
-    return f"{x:,.0f}".replace(",", " ")
+    else:
+        return f"{x:,.2f}"
+
+def safe_div(a, b):
+    try:
+        if pd.notna(a) and pd.notna(b) and float(b) != 0:
+            return float(a) / float(b)
+    except Exception:
+        return None
+    return None
 
 st.title("🔎 Explorer les projets — BDD Antoine (Cloud)")
 
@@ -124,14 +131,14 @@ else:
 
             indicateurs.append({
                 "Industriel": row.get("Industriel", "—"),
-                "Prix global / m² SHAB": prix_global / shab if pd.notna(prix_global) and pd.notna(shab) else None,
-                "Prix C/R hors VRD / m² SHAB": (prix_conception + travaux_hors_vrd) / shab if pd.notna(prix_conception) and pd.notna(travaux_hors_vrd) and pd.notna(shab) else None,
-                "Prix travaux hors VRD / m² SHAB": travaux_hors_vrd / shab if pd.notna(travaux_hors_vrd) and pd.notna(shab) else None,
-                "Prix hors-site seul / m² SHAB": prix_hors_site / shab if pd.notna(prix_hors_site) and pd.notna(shab) else None,
-                "SDP / SHOB": sdp / shab if pd.notna(sdp) and pd.notna(shab) else None,
-                "Prix global / m² SDP": prix_global / sdp if pd.notna(prix_global) and pd.notna(sdp) else None,
-                "Prix C/R hors VRD / m² SDP": (prix_conception + travaux_hors_vrd) / sdp if pd.notna(prix_conception) and pd.notna(travaux_hors_vrd) and pd.notna(sdp) else None,
-                "Prix travaux hors VRD / m² SDP": travaux_hors_vrd / sdp if pd.notna(travaux_hors_vrd) and pd.notna(sdp) else None,
+                "Prix global / m² SHAB": safe_div(prix_global, shab),
+                "Prix C/R hors VRD / m² SHAB": safe_div(prix_conception + travaux_hors_vrd, shab),
+                "Prix travaux hors VRD / m² SHAB": safe_div(travaux_hors_vrd, shab),
+                "Prix hors-site seul / m² SHAB": safe_div(prix_hors_site, shab),
+                "SDP / SHOB": safe_div(sdp, shab),
+                "Prix global / m² SDP": safe_div(prix_global, sdp),
+                "Prix C/R hors VRD / m² SDP": safe_div(prix_conception + travaux_hors_vrd, sdp),
+                "Prix travaux hors VRD / m² SDP": safe_div(travaux_hors_vrd, sdp),
             })
 
         df_indic = pd.DataFrame(indicateurs)
@@ -194,6 +201,29 @@ else:
             file_name=f"comparatif_{projet}.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         )
+
+    # === Mode Année ===
+    elif year != "Toutes":
+        st.markdown(f"### 📌 Moyennes pour l'année {year}")
+
+        indicateurs_annee = {
+            "Prix global / m² SHAB": safe_div(df_proj["Prix global"].sum(), df_proj["SHAB"].sum()),
+            "Prix C/R hors VRD / m² SHAB": safe_div(df_proj["Prix conception"].sum() + (df_proj["Prix travaux (compris VRD)"].sum() - df_proj["Prix VRD"].sum()), df_proj["SHAB"].sum()),
+            "Prix travaux hors VRD / m² SHAB": safe_div(df_proj["Prix travaux (compris VRD)"].sum() - df_proj["Prix VRD"].sum(), df_proj["SHAB"].sum()),
+            "Prix hors-site seul / m² SHAB": safe_div(df_proj["Prix hors-site seul"].sum(), df_proj["SHAB"].sum()),
+            "SDP / SHOB": safe_div(df_proj["Sacc (SDP pour les vieux projets)"].sum(), df_proj["SHAB"].sum()),
+            "Prix global / m² SDP": safe_div(df_proj["Prix global"].sum(), df_proj["Sacc (SDP pour les vieux projets)"].sum()),
+            "Prix C/R hors VRD / m² SDP": safe_div(df_proj["Prix conception"].sum() + (df_proj["Prix travaux (compris VRD)"].sum() - df_proj["Prix VRD"].sum()), df_proj["Sacc (SDP pour les vieux projets)"].sum()),
+            "Prix travaux hors VRD / m² SDP": safe_div(df_proj["Prix travaux (compris VRD)"].sum() - df_proj["Prix VRD"].sum(), df_proj["Sacc (SDP pour les vieux projets)"].sum()),
+        }
+
+        df_annee = pd.DataFrame([indicateurs_annee])
+        for col in df_annee.columns:
+            if "Prix" in col:
+                df_annee[col] = df_annee[col].apply(lambda v: format_val(v, "€/m²"))
+            elif "SDP" in col:
+                df_annee[col] = df_annee[col].apply(lambda v: format_val(v))
+        st.markdown(df_annee.to_html(index=False, escape=False), unsafe_allow_html=True)
 
 # === Graphiques évolution ===
 if show_graph and "Année" in df:
