@@ -150,10 +150,9 @@ else:
         }
 
         def highlight_min(val, col):
-            if isinstance(val, (pd.Series, pd.DataFrame)):
-                return "—"
             if pd.isna(val):
                 return "—"
+            # ✅ afficher toujours la valeur, avec ✅ si min
             if col in min_cols and val == min_cols[col]:
                 return f"✅ {format_val(val, '€/m²')}"
             if "€/m²" in col:
