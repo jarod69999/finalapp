@@ -116,7 +116,7 @@ else:
         st.markdown(f"### 📌 Projet : **{projet}**")
 
         indicateurs = []
-        for _, row in df_proj.iterrows():
+        for idx, row in df_proj.iterrows():
             shab = row.get("SHAB")
             sdp = row.get("Sacc (SDP pour les vieux projets)")
             prix_travaux = row.get("Prix travaux (compris VRD)")
@@ -129,8 +129,12 @@ else:
             if pd.notna(prix_travaux) and pd.notna(prix_vrd):
                 travaux_hors_vrd = prix_travaux - prix_vrd
 
+            industriel = row.get("Industriel")
+            if pd.isna(industriel) or str(industriel).strip() == "":
+                industriel = f"Groupement {len(indicateurs)+1}"
+
             indicateurs.append({
-                "Industriel": row.get("Industriel", "—"),
+                "Industriel": str(industriel),
                 "Prix global / m² SHAB": safe_div(prix_global, shab),
                 "Prix C/R hors VRD / m² SHAB": safe_div(prix_conception + travaux_hors_vrd, shab),
                 "Prix travaux hors VRD / m² SHAB": safe_div(travaux_hors_vrd, shab),
@@ -252,4 +256,5 @@ if show_graph and "Année" in df:
                 st.pyplot(fig)
 
 st.caption("💡 Conseil : placez le fichier Excel dans le repo avec le nom exact `HSC_Matrice prix Pilotes_2025.xlsx` pour qu'il soit chargé automatiquement.")
+
 
