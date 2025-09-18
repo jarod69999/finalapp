@@ -1,5 +1,6 @@
 import streamlit as st
 import pandas as pd
+import matplotlib.pyplot as plt
 from io import BytesIO
 import os
 
@@ -15,20 +16,10 @@ def load_and_transform(file_bytes: bytes):
     df.columns = df.columns.astype(str).str.strip()
 
     wanted = [
-        "OPÉRATION",
-        "DATE ATTRIBUTION",
-        "TYPOLOGIE",
-        "SYSTÈME HORS SITE",
-        "NB LOGEMENTS",
-        "Industriel",
-        "SHAB",
-        "Sacc (SDP pour les vieux projets)",
-        "Prix conception",
-        "Prix travaux (compris VRD)",
-        "Prix VRD",
-        "Prix global",
-        "Prix hors-site seul",
-        "Prix global / m² SHAB",
+        "OPÉRATION", "DATE ATTRIBUTION", "TYPOLOGIE", "SYSTÈME HORS SITE",
+        "NB LOGEMENTS", "Industriel", "SHAB", "Sacc (SDP pour les vieux projets)",
+        "Prix conception", "Prix travaux (compris VRD)", "Prix VRD",
+        "Prix global", "Prix hors-site seul", "Prix global / m² SHAB",
         "Prix C/R hors VRD / m² SHAB",
     ]
     cols_exist = [c for c in wanted if c in df.columns]
@@ -64,7 +55,6 @@ def load_and_transform(file_bytes: bytes):
     return df
 
 def format_val(x, unit=""):
-    # Fix: si c'est une Series/DataFrame → return "—"
     if isinstance(x, (pd.Series, pd.DataFrame)):
         return "—"
     if pd.isna(x):
@@ -106,6 +96,9 @@ with st.sidebar:
     projet = st.selectbox("2) Sélectionner le projet", ["Tous"] + projets)
     df_proj = df_year if projet == "Tous" else df_year[df_year["OPÉRATION"] == projet]
 
+    st.header("📈 Options graphiques")
+    show_graph = st.checkbox("Afficher l'évolution des prix moyens par année", value=False)
+
 st.subheader("📊 Chiffres clés")
 
 if len(df_proj) == 0:
@@ -115,17 +108,16 @@ else:
     if projet != "Tous":
         st.markdown(f"### 📌 Projet : **{projet}**")
 
-        # Calcul des indicateurs par groupement
         indicateurs = []
         for _, row in df_proj.iterrows():
             travaux_hors_vrd_m2_shab = None
             travaux_hors_vrd_m2_sacc = None
             taux_hono = None
-            if pd.notna(row["Prix travaux (compris VRD)"]) and pd.notna(row["Prix VRD"]) and pd.notna(row["SHAB"]):
+            if all(pd.notna([row["Prix travaux (compris VRD)"], row["Prix VRD"], row["SHAB"]])):
                 travaux_hors_vrd_m2_shab = (row["Prix travaux (compris VRD)"] - row["Prix VRD"]) / row["SHAB"]
-            if pd.notna(row["Sacc (SDP pour les vieux projets)"]) and pd.notna(row["Prix VRD"]) and pd.notna(row["Prix travaux (compris VRD)"]):
+            if all(pd.notna([row["Sacc (SDP pour les vieux projets)"], row["Prix VRD"], row["Prix travaux (compris VRD)"]])):
                 travaux_hors_vrd_m2_sacc = (row["Prix travaux (compris VRD)"] - row["Prix VRD"]) / row["Sacc (SDP pour les vieux projets)"]
-            if pd.notna(row["Prix conception"]) and pd.notna(row["Prix global"]):
+            if all(pd.notna([row["Prix conception"], row["Prix global"]])):
                 taux_hono = (row["Prix conception"] / row["Prix global"]) * 100
 
             indicateurs.append({
@@ -139,11 +131,8 @@ else:
 
         df_indic = pd.DataFrame(indicateurs)
 
-        # Trouver le minimum pour chaque colonne numérique
-        min_cols = {}
-        for col in ["Travaux hors VRD / m² SHAB", "Prix global / m² SHAB", "Travaux hors VRD / m² Sacc"]:
-            if col in df_indic.columns:
-                min_cols[col] = df_indic[col].min()
+        # Min par colonne
+        min_cols = {col: df_indic[col].min() for col in ["Travaux hors VRD / m² SHAB","Prix global / m² SHAB","Travaux hors VRD / m² Sacc"] if col in df_indic}
 
         def highlight_min(val, col):
             if pd.isna(val):
@@ -156,29 +145,28 @@ else:
         for col in styled.columns:
             if col in min_cols:
                 styled[col] = styled[col].apply(lambda v: highlight_min(v, col))
-            elif col in ["SHAB"]:
+            elif col == "SHAB":
                 styled[col] = styled[col].apply(lambda v: format_val(v, "m²"))
-            elif col in ["Taux honoraire"]:
+            elif col == "Taux honoraire":
                 styled[col] = styled[col].apply(lambda v: format_val(v, "%"))
             else:
                 styled[col] = styled[col].apply(lambda v: str(v) if pd.notna(v) else "—")
 
         # Moyenne projet
         moy = df_indic.mean(numeric_only=True)
-        moy_row = {
+        styled = pd.concat([styled, pd.DataFrame([{
             "Industriel": "📊 Moyenne projet",
             "Travaux hors VRD / m² SHAB": format_val(moy.get("Travaux hors VRD / m² SHAB"), "€/m²"),
             "Prix global / m² SHAB": format_val(moy.get("Prix global / m² SHAB"), "€/m²"),
             "Travaux hors VRD / m² Sacc": format_val(moy.get("Travaux hors VRD / m² Sacc"), "€/m²"),
             "SHAB": format_val(moy.get("SHAB"), "m²"),
             "Taux honoraire": format_val(moy.get("Taux honoraire"), "%"),
-        }
-        styled = pd.concat([styled, pd.DataFrame([moy_row])], ignore_index=True)
+        }])], ignore_index=True)
 
         st.markdown("#### Comparatif par groupement")
         st.markdown(styled.to_html(index=False, escape=False), unsafe_allow_html=True)
 
-    # === Mode Année entière ===
+    # === Mode Année ===
     elif year != "Toutes":
         st.markdown(f"### 📌 Moyenne pour l'année {year}")
         indicateurs_annee = {
@@ -194,5 +182,24 @@ else:
             df_annee[col] = df_annee[col].apply(lambda v: format_val(v, unit))
         st.markdown(df_annee.to_html(index=False, escape=False), unsafe_allow_html=True)
 
-st.caption("💡 Conseil : placez le fichier Excel dans le repo avec le nom exact `HSC_Matrice prix Pilotes_2025.xlsx` pour qu'il soit chargé automatiquement.")
+# === Graphiques évolution ===
+if show_graph and "Année" in df:
+    st.subheader("📈 Évolution des prix moyens par année")
+
+    indicateurs_graph = st.sidebar.multiselect(
+        "Choisir les indicateurs à afficher",
+        ["Prix global / m² SHAB", "Travaux hors VRD / m² SHAB", "Travaux hors VRD / m² Sacc"],
+        default=["Prix global / m² SHAB"]
+    )
+
+    for indic in indicateurs_graph:
+        df_temp = df.copy()
+        if indic == "Travaux hors VRD / m² SHAB" and all(c in df.columns for c in ["Prix travaux (compris VRD)", "Prix VRD", "SHAB"]):
+            df_temp[indic] = (df_temp["Prix travaux (compris VRD)"] - df_temp["Prix VRD"]) / df_temp["SHAB"]
+        elif indic == "Travaux hors VRD / m² Sacc" and all(c in df.columns for c in ["Prix travaux (compris VRD)", "Prix VRD", "Sacc (SDP pour les vieux projets)"]):
+            df_temp[indic] = (df_temp["Prix travaux (compris VRD)"] - df_temp["Prix VRD"]) / df_temp["Sacc (SDP pour les vieux projets)"]
+
+        if indic in df_temp.columns:
+            df_graph = df_temp.groupby("Anné
+
 
