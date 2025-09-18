@@ -135,6 +135,9 @@ else:
         min_cols = {col: df_indic[col].min() for col in ["Travaux hors VRD / m² SHAB","Prix global / m² SHAB","Travaux hors VRD / m² Sacc"] if col in df_indic}
 
         def highlight_min(val, col):
+            # 🔧 sécurité : si ce n’est pas un scalaire, on sort
+            if isinstance(val, (pd.Series, pd.DataFrame)):
+                return "—"
             if pd.isna(val):
                 return "—"
             if col in min_cols and val == min_cols[col]:
@@ -210,3 +213,4 @@ if show_graph and "Année" in df:
                 st.pyplot(fig)
 
 st.caption("💡 Conseil : placez le fichier Excel dans le repo avec le nom exact `HSC_Matrice prix Pilotes_2025.xlsx` pour qu'il soit chargé automatiquement.")
+
