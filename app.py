@@ -64,8 +64,12 @@ def load_and_transform(file_bytes: bytes):
     return df
 
 def format_val(x, unit=""):
+    # Fix: si c'est une Series/DataFrame → return "—"
+    if isinstance(x, (pd.Series, pd.DataFrame)):
+        return "—"
     if pd.isna(x):
         return "—"
+    x = float(x)
     if unit == "€/m²":
         return f"{x:,.0f} €/m²".replace(",", " ")
     elif unit == "m²":
@@ -117,19 +121,19 @@ else:
             travaux_hors_vrd_m2_shab = None
             travaux_hors_vrd_m2_sacc = None
             taux_hono = None
-            if not pd.isna(row.get("Prix travaux (compris VRD)")) and not pd.isna(row.get("Prix VRD")) and not pd.isna(row.get("SHAB")):
+            if pd.notna(row["Prix travaux (compris VRD)"]) and pd.notna(row["Prix VRD"]) and pd.notna(row["SHAB"]):
                 travaux_hors_vrd_m2_shab = (row["Prix travaux (compris VRD)"] - row["Prix VRD"]) / row["SHAB"]
-            if not pd.isna(row.get("Sacc (SDP pour les vieux projets)")) and not pd.isna(row.get("Prix VRD")):
+            if pd.notna(row["Sacc (SDP pour les vieux projets)"]) and pd.notna(row["Prix VRD"]) and pd.notna(row["Prix travaux (compris VRD)"]):
                 travaux_hors_vrd_m2_sacc = (row["Prix travaux (compris VRD)"] - row["Prix VRD"]) / row["Sacc (SDP pour les vieux projets)"]
-            if not pd.isna(row.get("Prix conception")) and not pd.isna(row.get("Prix global")):
+            if pd.notna(row["Prix conception"]) and pd.notna(row["Prix global"]):
                 taux_hono = (row["Prix conception"] / row["Prix global"]) * 100
 
             indicateurs.append({
-                "Industriel": row.get("Industriel", "—"),
+                "Industriel": row["Industriel"] if "Industriel" in row else "—",
                 "Travaux hors VRD / m² SHAB": travaux_hors_vrd_m2_shab,
-                "Prix global / m² SHAB": row.get("Prix global / m² SHAB"),
+                "Prix global / m² SHAB": row["Prix global / m² SHAB"] if "Prix global / m² SHAB" in row else None,
                 "Travaux hors VRD / m² Sacc": travaux_hors_vrd_m2_sacc,
-                "SHAB": row.get("SHAB"),
+                "SHAB": row["SHAB"] if "SHAB" in row else None,
                 "Taux honoraire": taux_hono,
             })
 
@@ -141,15 +145,13 @@ else:
             if col in df_indic.columns:
                 min_cols[col] = df_indic[col].min()
 
-        # Appliquer la mise en évidence du minimum
         def highlight_min(val, col):
             if pd.isna(val):
-                return format_val(val)
+                return "—"
             if col in min_cols and val == min_cols[col]:
                 return f"✅ {format_val(val, '€/m²')}"
-            return format_val(val, '€/m²') if "m²" in col else format_val(val)
+            return format_val(val, "€/m²") if "m²" in col else format_val(val)
 
-        # Transformer en tableau affichable
         styled = df_indic.copy()
         for col in styled.columns:
             if col in min_cols:
@@ -159,9 +161,9 @@ else:
             elif col in ["Taux honoraire"]:
                 styled[col] = styled[col].apply(lambda v: format_val(v, "%"))
             else:
-                styled[col] = styled[col].apply(lambda v: str(v) if not pd.isna(v) else "—")
+                styled[col] = styled[col].apply(lambda v: str(v) if pd.notna(v) else "—")
 
-        # Ajouter ligne moyenne projet
+        # Moyenne projet
         moy = df_indic.mean(numeric_only=True)
         moy_row = {
             "Industriel": "📊 Moyenne projet",
@@ -179,12 +181,11 @@ else:
     # === Mode Année entière ===
     elif year != "Toutes":
         st.markdown(f"### 📌 Moyenne pour l'année {year}")
-        moy = df_proj.mean(numeric_only=True)
         indicateurs_annee = {
             "Travaux hors VRD / m² SHAB": (df_proj["Prix travaux (compris VRD)"] - df_proj["Prix VRD"]).sum() / df_proj["SHAB"].sum() if "Prix travaux (compris VRD)" in df_proj and "Prix VRD" in df_proj and "SHAB" in df_proj else None,
-            "Prix global / m² SHAB": moy.get("Prix global / m² SHAB"),
+            "Prix global / m² SHAB": df_proj["Prix global / m² SHAB"].mean() if "Prix global / m² SHAB" in df_proj else None,
             "Travaux hors VRD / m² Sacc": (df_proj["Prix travaux (compris VRD)"] - df_proj["Prix VRD"]).sum() / df_proj["Sacc (SDP pour les vieux projets)"].sum() if "Sacc (SDP pour les vieux projets)" in df_proj else None,
-            "SHAB": moy.get("SHAB"),
+            "SHAB": df_proj["SHAB"].mean() if "SHAB" in df_proj else None,
             "Taux honoraire": (df_proj["Prix conception"].sum() / df_proj["Prix global"].sum() * 100) if "Prix conception" in df_proj and "Prix global" in df_proj else None,
         }
         df_annee = pd.DataFrame([indicateurs_annee])
@@ -194,5 +195,4 @@ else:
         st.markdown(df_annee.to_html(index=False, escape=False), unsafe_allow_html=True)
 
 st.caption("💡 Conseil : placez le fichier Excel dans le repo avec le nom exact `HSC_Matrice prix Pilotes_2025.xlsx` pour qu'il soit chargé automatiquement.")
-
 
