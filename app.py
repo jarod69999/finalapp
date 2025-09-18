@@ -200,6 +200,13 @@ if show_graph and "Année" in df:
             df_temp[indic] = (df_temp["Prix travaux (compris VRD)"] - df_temp["Prix VRD"]) / df_temp["Sacc (SDP pour les vieux projets)"]
 
         if indic in df_temp.columns:
-            df_graph = df_temp.groupby("Anné
+            df_graph = df_temp.groupby("Année")[indic].mean().reset_index()
+            if len(df_graph) > 0:
+                fig, ax = plt.subplots(figsize=(8,4))
+                ax.plot(df_graph["Année"], df_graph[indic], marker="o")
+                ax.set_title(f"{indic} (moyenne annuelle)")
+                ax.set_xlabel("Année")
+                ax.set_ylabel(indic)
+                st.pyplot(fig)
 
-
+st.caption("💡 Conseil : placez le fichier Excel dans le repo avec le nom exact `HSC_Matrice prix Pilotes_2025.xlsx` pour qu'il soit chargé automatiquement.")
