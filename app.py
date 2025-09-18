@@ -110,23 +110,28 @@ else:
 
         indicateurs = []
         for _, row in df_proj.iterrows():
-            travaux_hors_vrd_m2_shab = None
-            travaux_hors_vrd_m2_sacc = None
-            taux_hono = None
-            if all(pd.notna([row["Prix travaux (compris VRD)"], row["Prix VRD"], row["SHAB"]])):
-                travaux_hors_vrd_m2_shab = (row["Prix travaux (compris VRD)"] - row["Prix VRD"]) / row["SHAB"]
-            if all(pd.notna([row["Sacc (SDP pour les vieux projets)"], row["Prix VRD"], row["Prix travaux (compris VRD)"]])):
-                travaux_hors_vrd_m2_sacc = (row["Prix travaux (compris VRD)"] - row["Prix VRD"]) / row["Sacc (SDP pour les vieux projets)"]
-            if all(pd.notna([row["Prix conception"], row["Prix global"]])):
-                taux_hono = (row["Prix conception"] / row["Prix global"]) * 100
+            shab = row.get("SHAB")
+            sdp = row.get("Sacc (SDP pour les vieux projets)")
+            prix_travaux = row.get("Prix travaux (compris VRD)")
+            prix_vrd = row.get("Prix VRD")
+            prix_global = row.get("Prix global")
+            prix_conception = row.get("Prix conception")
+            prix_hors_site = row.get("Prix hors-site seul")
+
+            travaux_hors_vrd = None
+            if pd.notna(prix_travaux) and pd.notna(prix_vrd):
+                travaux_hors_vrd = prix_travaux - prix_vrd
 
             indicateurs.append({
-                "Industriel": row["Industriel"] if "Industriel" in row else "—",
-                "Travaux hors VRD / m² SHAB": travaux_hors_vrd_m2_shab,
-                "Prix global / m² SHAB": row["Prix global / m² SHAB"] if "Prix global / m² SHAB" in row else None,
-                "Travaux hors VRD / m² Sacc": travaux_hors_vrd_m2_sacc,
-                "SHAB": row["SHAB"] if "SHAB" in row else None,
-                "Taux honoraire": taux_hono,
+                "Industriel": row.get("Industriel", "—"),
+                "Prix global / m² SHAB": prix_global / shab if pd.notna(prix_global) and pd.notna(shab) else None,
+                "Prix C/R hors VRD / m² SHAB": (prix_conception + travaux_hors_vrd) / shab if pd.notna(prix_conception) and pd.notna(travaux_hors_vrd) and pd.notna(shab) else None,
+                "Prix travaux hors VRD / m² SHAB": travaux_hors_vrd / shab if pd.notna(travaux_hors_vrd) and pd.notna(shab) else None,
+                "Prix hors-site seul / m² SHAB": prix_hors_site / shab if pd.notna(prix_hors_site) and pd.notna(shab) else None,
+                "SDP / SHOB": sdp / shab if pd.notna(sdp) and pd.notna(shab) else None,
+                "Prix global / m² SDP": prix_global / sdp if pd.notna(prix_global) and pd.notna(sdp) else None,
+                "Prix C/R hors VRD / m² SDP": (prix_conception + travaux_hors_vrd) / sdp if pd.notna(prix_conception) and pd.notna(travaux_hors_vrd) and pd.notna(sdp) else None,
+                "Prix travaux hors VRD / m² SDP": travaux_hors_vrd / sdp if pd.notna(travaux_hors_vrd) and pd.notna(sdp) else None,
             })
 
         df_indic = pd.DataFrame(indicateurs)
@@ -134,8 +139,7 @@ else:
         # Min par colonne
         min_cols = {
             col: df_indic[col].min()
-            for col in ["Travaux hors VRD / m² SHAB", "Prix global / m² SHAB", "Travaux hors VRD / m² Sacc"]
-            if col in df_indic
+            for col in df_indic.columns if col not in ["Industriel"]
         }
 
         def highlight_min(val, col):
@@ -145,59 +149,51 @@ else:
                 return "—"
             if col in min_cols and val == min_cols[col]:
                 return f"✅ {format_val(val, '€/m²')}"
-            return format_val(val, "€/m²") if "m²" in col else format_val(val)
+            if "€/m²" in col:
+                return format_val(val, "€/m²")
+            elif col == "SDP / SHOB":
+                return f"{val:.2f}" if pd.notna(val) else "—"
+            return format_val(val)
 
         styled = df_indic.copy()
         for col in styled.columns:
             if col in min_cols:
                 styled[col] = styled[col].apply(lambda v: highlight_min(v, col))
-            elif col == "SHAB":
-                styled[col] = styled[col].apply(lambda v: format_val(v, "m²"))
-            elif col == "Taux honoraire":
-                styled[col] = styled[col].apply(lambda v: format_val(v, "%"))
+            elif col == "Industriel":
+                styled[col] = styled[col].apply(lambda v: str(v))
+            elif col == "SDP / SHOB":
+                styled[col] = styled[col].apply(lambda v: f"{v:.2f}" if pd.notna(v) else "—")
             else:
-                styled[col] = styled[col].apply(lambda v: str(v) if pd.notna(v) else "—")
+                styled[col] = styled[col].apply(lambda v: format_val(v, "€/m²"))
 
         # Moyenne projet
         moy = df_indic.mean(numeric_only=True)
-        moyenne = {
-            "Industriel": "📊 Moyenne projet",
-            "Travaux hors VRD / m² SHAB": format_val(moy.get("Travaux hors VRD / m² SHAB"), "€/m²"),
-            "Prix global / m² SHAB": format_val(moy.get("Prix global / m² SHAB"), "€/m²"),
-            "Travaux hors VRD / m² Sacc": format_val(moy.get("Travaux hors VRD / m² Sacc"), "€/m²"),
-            "SHAB": format_val(moy.get("SHAB"), "m²"),
-            "Taux honoraire": format_val(moy.get("Taux honoraire"), "%"),
-        }
+        moyenne = {"Industriel": "📊 Moyenne projet"}
+        for col in df_indic.columns:
+            if col == "Industriel":
+                continue
+            if col == "SDP / SHOB":
+                moyenne[col] = f"{moy.get(col):.2f}" if pd.notna(moy.get(col)) else "—"
+            else:
+                moyenne[col] = format_val(moy.get(col), "€/m²")
 
         styled = pd.concat([styled, pd.DataFrame([moyenne])], ignore_index=True)
 
-        st.markdown("#### Comparatif par groupement")
+        st.markdown("#### Comparatif par groupement (avec moyennes)")
         st.markdown(styled.to_html(index=False, escape=False), unsafe_allow_html=True)
 
-        # 📥 Bouton export CSV
-        csv = styled.to_csv(index=False, sep=";").encode("utf-8")
-        st.download_button(
-            label="📥 Télécharger le comparatif en CSV",
-            data=csv,
-            file_name=f"comparatif_{projet}.csv",
-            mime="text/csv"
-        )
+        # 📥 Export Excel
+        output = BytesIO()
+        with pd.ExcelWriter(output, engine="openpyxl") as writer:
+            styled.to_excel(writer, index=False, sheet_name="Comparatif")
+        excel_data = output.getvalue()
 
-    # === Mode Année ===
-    elif year != "Toutes":
-        st.markdown(f"### 📌 Moyenne pour l'année {year}")
-        indicateurs_annee = {
-            "Travaux hors VRD / m² SHAB": (df_proj["Prix travaux (compris VRD)"] - df_proj["Prix VRD"]).sum() / df_proj["SHAB"].sum() if "Prix travaux (compris VRD)" in df_proj and "Prix VRD" in df_proj and "SHAB" in df_proj else None,
-            "Prix global / m² SHAB": df_proj["Prix global / m² SHAB"].mean() if "Prix global / m² SHAB" in df_proj else None,
-            "Travaux hors VRD / m² Sacc": (df_proj["Prix travaux (compris VRD)"] - df_proj["Prix VRD"]).sum() / df_proj["Sacc (SDP pour les vieux projets)"].sum() if "Sacc (SDP pour les vieux projets)" in df_proj else None,
-            "SHAB": df_proj["SHAB"].mean() if "SHAB" in df_proj else None,
-            "Taux honoraire": (df_proj["Prix conception"].sum() / df_proj["Prix global"].sum() * 100) if "Prix conception" in df_proj and "Prix global" in df_proj else None,
-        }
-        df_annee = pd.DataFrame([indicateurs_annee])
-        for col in df_annee.columns:
-            unit = "€/m²" if "m²" in col else "%" if "Taux" in col else "m²"
-            df_annee[col] = df_annee[col].apply(lambda v: format_val(v, unit))
-        st.markdown(df_annee.to_html(index=False, escape=False), unsafe_allow_html=True)
+        st.download_button(
+            label="📥 Télécharger le comparatif en Excel",
+            data=excel_data,
+            file_name=f"comparatif_{projet}.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
 
 # === Graphiques évolution ===
 if show_graph and "Année" in df:
@@ -205,15 +201,15 @@ if show_graph and "Année" in df:
 
     indicateurs_graph = st.sidebar.multiselect(
         "Choisir les indicateurs à afficher",
-        ["Prix global / m² SHAB", "Travaux hors VRD / m² SHAB", "Travaux hors VRD / m² Sacc"],
+        ["Prix global / m² SHAB", "Prix travaux hors VRD / m² SHAB", "Prix travaux hors VRD / m² SDP"],
         default=["Prix global / m² SHAB"]
     )
 
     for indic in indicateurs_graph:
         df_temp = df.copy()
-        if indic == "Travaux hors VRD / m² SHAB" and all(c in df.columns for c in ["Prix travaux (compris VRD)", "Prix VRD", "SHAB"]):
+        if indic == "Prix travaux hors VRD / m² SHAB" and all(c in df.columns for c in ["Prix travaux (compris VRD)", "Prix VRD", "SHAB"]):
             df_temp[indic] = (df_temp["Prix travaux (compris VRD)"] - df_temp["Prix VRD"]) / df_temp["SHAB"]
-        elif indic == "Travaux hors VRD / m² Sacc" and all(c in df.columns for c in ["Prix travaux (compris VRD)", "Prix VRD", "Sacc (SDP pour les vieux projets)"]):
+        elif indic == "Prix travaux hors VRD / m² SDP" and all(c in df.columns for c in ["Prix travaux (compris VRD)", "Prix VRD", "Sacc (SDP pour les vieux projets)"]):
             df_temp[indic] = (df_temp["Prix travaux (compris VRD)"] - df_temp["Prix VRD"]) / df_temp["Sacc (SDP pour les vieux projets)"]
 
         if indic in df_temp.columns:
