@@ -132,10 +132,13 @@ else:
         df_indic = pd.DataFrame(indicateurs)
 
         # Min par colonne
-        min_cols = {col: df_indic[col].min() for col in ["Travaux hors VRD / m² SHAB","Prix global / m² SHAB","Travaux hors VRD / m² Sacc"] if col in df_indic}
+        min_cols = {
+            col: df_indic[col].min()
+            for col in ["Travaux hors VRD / m² SHAB", "Prix global / m² SHAB", "Travaux hors VRD / m² Sacc"]
+            if col in df_indic
+        }
 
         def highlight_min(val, col):
-            # 🔧 sécurité : si ce n’est pas un scalaire, on sort
             if isinstance(val, (pd.Series, pd.DataFrame)):
                 return "—"
             if pd.isna(val):
@@ -157,17 +160,28 @@ else:
 
         # Moyenne projet
         moy = df_indic.mean(numeric_only=True)
-        styled = pd.concat([styled, pd.DataFrame([{
+        moyenne = {
             "Industriel": "📊 Moyenne projet",
             "Travaux hors VRD / m² SHAB": format_val(moy.get("Travaux hors VRD / m² SHAB"), "€/m²"),
             "Prix global / m² SHAB": format_val(moy.get("Prix global / m² SHAB"), "€/m²"),
             "Travaux hors VRD / m² Sacc": format_val(moy.get("Travaux hors VRD / m² Sacc"), "€/m²"),
             "SHAB": format_val(moy.get("SHAB"), "m²"),
             "Taux honoraire": format_val(moy.get("Taux honoraire"), "%"),
-        }])], ignore_index=True)
+        }
+
+        styled = pd.concat([styled, pd.DataFrame([moyenne])], ignore_index=True)
 
         st.markdown("#### Comparatif par groupement")
         st.markdown(styled.to_html(index=False, escape=False), unsafe_allow_html=True)
+
+        # 📥 Bouton export CSV
+        csv = styled.to_csv(index=False, sep=";").encode("utf-8")
+        st.download_button(
+            label="📥 Télécharger le comparatif en CSV",
+            data=csv,
+            file_name=f"comparatif_{projet}.csv",
+            mime="text/csv"
+        )
 
     # === Mode Année ===
     elif year != "Toutes":
